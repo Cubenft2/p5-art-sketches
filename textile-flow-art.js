@@ -1,64 +1,86 @@
 let params;
 let strands = [];
+let strandIndex = 0;
 
 function setup() {
   params = {
-    resolution: [3840, 2160], // Default 4K
-    strandCount: 50000,       // 50k strands
+    baseResolution: [3840, 2160], // default 4K
+    scale: 1,                     // 0.5 for 2K, 2 for 8K
+    strandCount: 50000,           // 50k strands
     strandLength: 180,
     strandThickness: 0.6,
     turbulence: 0.0015,
-    bands: 8,
+    chunkSize: 500,
     colors: [
-      "#8B3A3A", "#A14D3A", "#D9A441",
-      "#6E7D8C", "#8A7CA1", "#445B74",
-      "#B1746F", "#5B3E66"
+      "#5B2C2C", "#8B3A3A", "#B26E63",
+      "#D9A441", "#4C8C8A", "#445B74",
+      "#8A7CA1", "#5B3E66", "#6E7D8C"
     ]
   };
 
-  createCanvas(params.resolution[0], params.resolution[1]);
-  colorMode(HSB, 360, 100, 100, 100);
-  noLoop();
+  const w = params.baseResolution[0] * params.scale;
+  const h = params.baseResolution[1] * params.scale;
+  createCanvas(w, h);
 
-  // Generate strands
+  colorMode(HSB, 360, 100, 100, 100);
+  noFill();
+
+  // Prepare strands
   for (let i = 0; i < params.strandCount; i++) {
-    strands.push({
-      x: random(width),
-      y: random(height),
-      band: floor(map(random(height), 0, height, 0, params.bands))
-    });
+    strands.push({ x: random(width), y: random(height) });
   }
 
-  background(20); // Dark background
+  background(20); // dark backdrop
+  drawGrid();
 }
 
 function draw() {
-  // Chunked rendering: draw 500 strands per frame
-  let chunk = 500;
-  for (let i = 0; i < chunk && strands.length > 0; i++) {
-    drawStrand(strands.pop());
+  for (let i = 0; i < params.chunkSize && strandIndex < strands.length; i++, strandIndex++) {
+    drawStrand(strands[strandIndex]);
   }
-  if (strands.length > 0) {
-    requestAnimationFrame(draw); // Continue next frame
+
+  if (strandIndex >= strands.length) {
+    noLoop();
   }
 }
 
 function drawStrand(s) {
   let x = s.x;
   let y = s.y;
-  let baseColor = color(params.colors[s.band]);
-  let nextColor = color(params.colors[(s.band + 1) % params.colors.length]);
 
-  beginShape();
   for (let i = 0; i < params.strandLength; i++) {
-    let n = noise(x * params.turbulence, y * params.turbulence) * TWO_PI * 2;
-    x += cos(n) * 1.5;
-    y += sin(n) * 1.5;
+    const n = noise(x * params.turbulence, y * params.turbulence) * TWO_PI * 2;
+    const nx = x + cos(n) * 1.5;
+    const ny = y + sin(n) * 1.5;
 
-    let c = lerpColor(baseColor, nextColor, i / params.strandLength);
-    stroke(c);
+    // Color based on vertical position with band blending
+    const bandPos = constrain(map(y, 0, height, 0, params.colors.length - 1), 0, params.colors.length - 1);
+    const idx = floor(bandPos);
+    const frac = bandPos - idx;
+    const c1 = color(params.colors[idx]);
+    const c2 = color(params.colors[min(idx + 1, params.colors.length - 1)]);
+    stroke(lerpColor(c1, c2, frac));
     strokeWeight(params.strandThickness);
-    vertex(x, y);
+    line(x, y, nx, ny);
+
+    x = nx;
+    y = ny;
   }
-  endShape();
+}
+
+function drawGrid() {
+  stroke(0, 0, 100, 3); // low opacity grid
+  strokeWeight(1);
+  for (let x = 0; x <= width; x += 20) {
+    line(x, 0, x, height);
+  }
+  for (let y = 0; y <= height; y += 20) {
+    line(0, y, width, y);
+  }
+}
+
+function keyPressed() {
+  if (key === 's' || key === 'S') {
+    saveCanvas('textile-flow-art', 'png');
+  }
 }
